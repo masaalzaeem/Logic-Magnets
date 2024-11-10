@@ -61,6 +61,15 @@ while running:
                 if in_game:
                     initialize_level(current_level)
                     continue  # Skip drawing for this frame
+            
+            elif event.key == pygame.K_b and pygame.key.get_mods() & pygame.KMOD_SHIFT:
+                if in_game:
+                    game.bfs_solve()  # Call the BFS function in Game class
+
+            # Handle Shift + D key event for DFS
+            elif event.key == pygame.K_d and pygame.key.get_mods() & pygame.KMOD_SHIFT:
+                if in_game:
+                    game.dfs_solve()  # Call the DFS function in Game class
 
         # Handle events in the game if in_game
         if in_game and game:

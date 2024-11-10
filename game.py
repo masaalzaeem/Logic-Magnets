@@ -3,6 +3,7 @@ from grid import Grid
 from magnet import Magnet
 from cursor import Cursor
 from level import Level
+from collections import deque
 
 class Game:
     def __init__(self, screen, grid_size, grays, reds, purples, target_positions, moves_allowed, level_number):
@@ -335,3 +336,53 @@ class Game:
     def is_position_empty(self, pos):
         """Check if a given position is empty (not occupied by any magnet)."""
         return not self.is_position_occupied(pos)
+
+    def get_neighbors(state):
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        for dr, dc in directions:
+            new_row, new_col = row, col
+
+        while (0 <= new_row + dr < self.grid.rows and
+            0 <= new_col + dc < self.grid.cols and
+            not self.position_occupied(new_row + dr, new_col + dc, current_state)):
+            
+            new_row += dr
+            new_col += dc
+        new_state = new_row,new_col
+        return tuple(new_state)
+
+    def bfs_solve(self):
+        start_state = Level.get_level_properties(self, self.level_number)
+        queue = deque([(start_state, [])])
+        visited = set()
+        
+        while queue:
+            state, path = queue.popleft()
+            
+            if self.check_win_condition():
+                return path
+            
+            if state not in visited:
+                visited.add(state)
+                for move, neighbor in get_neighbors(state):
+                    queue.append((neighbor, path + [move]))
+
+        return None
+
+    def dfs_solve(self):
+        start_state = Level.get_level_properties(self, self.level_number)
+        stack = [(start_state, [])]
+        visited = set()
+
+        while stack:
+            state, path = stack.pop()
+            
+            if self.check_win_condition():
+                return path
+
+            if state not in visited:
+                visited.add(state)
+                for move, neighbor in get_neighbors(state):
+                    stack.append((neighbor, path + [move]))
+
+        return None
