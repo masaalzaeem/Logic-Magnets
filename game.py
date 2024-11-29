@@ -1,9 +1,12 @@
 import pygame
+import heapq
 from grid import Grid
 from magnet import Magnet
 from cursor import Cursor
 from level import Level
 from collections import deque
+from heapq import heappush, heappop
+
 
 class Game:
     def __init__(self, screen, grid_size, grays, reds, purples, target_positions, moves_allowed, level_number):
@@ -265,7 +268,6 @@ class Game:
                     self.push_magnets_according_to_rules(purple, direction)
 
     def get_adjacent_magnets(self, purple, direction):
-        """Return a list of magnets directly adjacent to the purple magnet in the specified direction."""
         x, y = purple.pos
         adjacent_positions = []
 
@@ -290,7 +292,6 @@ class Game:
                 self.push_magnets_away_from_purple(purple, adjacent_magnets, direction)
 
     def has_blank_space_next_to(self, purple, direction):
-        """Check if there is a blank space immediately next to the purple magnet."""
         x, y = purple.pos
         if direction == "left":
             return self.is_position_empty((x, y - 1))
@@ -303,12 +304,10 @@ class Game:
         return False
 
     def push_magnets_away_from_purple(self, purple, adjacent_magnets, direction):
-        """Push adjacent magnets away from the purple magnet to create space."""
         for magnet in adjacent_magnets:
             self.push_single_magnet(purple, magnet, direction)
 
     def push_single_magnet(self, purple, magnet, direction):
-        """Push a single magnet according to the defined rules."""
         x, y = magnet.pos
         new_pos = (x, y)
 
@@ -325,64 +324,245 @@ class Game:
             magnet.pos = new_pos
 
     def is_within_bounds(self, pos):
-        """Check if a position is within the grid bounds."""
         x, y = pos
         return 0 <= x < self.grid.rows and 0 <= y < self.grid.cols
 
     def is_position_occupied(self, pos):
-        """Check if a given position is occupied by any magnet."""
         return any(magnet.pos == pos for magnet in self.grays + self.reds + self.purples)
 
     def is_position_empty(self, pos):
-        """Check if a given position is empty (not occupied by any magnet)."""
         return not self.is_position_occupied(pos)
 
-    def get_neighbors(state):
+    def get_neighbors(self, state):
         directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        row, col = state
+        neighbors = []
+
         for dr, dc in directions:
             new_row, new_col = row, col
 
-        while (0 <= new_row + dr < self.grid.rows and
-            0 <= new_col + dc < self.grid.cols and
-            not self.position_occupied(new_row + dr, new_col + dc, current_state)):
-            
-            new_row += dr
-            new_col += dc
-        new_state = new_row,new_col
-        return tuple(new_state)
+            while (
+                0 <= new_row + dr < self.grid.rows and
+                0 <= new_col + dc < self.grid.cols and
+                not self.is_position_occupied((new_row + dr, new_col + dc))
+            ):
+                new_row += dr
+                new_col += dc
+
+            neighbors.append((new_row, new_col))
+
+        return neighbors
+
+    def move_and_apply_effects(self, magnet, new_position):
+
+        if not self.is_within_bounds(new_position) or self.is_position_occupied(new_position):
+            return False 
+
+        magnet.pos = new_position
+        print('ss',magnet.pos)
+        all_magnets = self.reds + self.purples + self.grays
+
+        effect_type = "pull" if magnet in self.reds else "push" if magnet in self.purples else None
+
+        if effect_type:
+            for other in all_magnets:
+                if other == magnet:
+                    continue  
+
+                if other.pos[0] == magnet.pos[0]:
+                    direction = -1 if other.pos[1] > magnet.pos[1] else 1
+                    new_pos = (other.pos[0], other.pos[1] + direction) if effect_type == "pull" else (other.pos[0], other.pos[1] - direction)
+                elif other.pos[1] == magnet.pos[1]: 
+                    direction = -1 if other.pos[0] > magnet.pos[0] else 1
+                    new_pos = (other.pos[0] + direction, other.pos[1]) if effect_type == "pull" else (other.pos[0] - direction, other.pos[1])
+                else:
+                    continue  
+
+                
+                if self.is_within_bounds(new_pos) and not self.is_position_occupied(new_pos):
+                    other.pos = new_pos 
+        return True 
+    
+    def restore_state(self, state):
+        for (pos, type_), magnet in zip(state, self.reds + self.purples + self.grays):
+            magnet.pos = pos
 
     def bfs_solve(self):
-        start_state = Level.get_level_properties(self, self.level_number)
+        start_state = tuple((magnet.pos, 'red') for magnet in self.reds) + \
+                    tuple((magnet.pos, 'purple') for magnet in self.purples) + \
+                    tuple((magnet.pos, 'gray') for magnet in self.grays)
+        visited = set()
         queue = deque([(start_state, [])])
-        visited = set()
-        
+
         while queue:
-            state, path = queue.popleft()
-            
+            current_state, path = queue.popleft()
+
+            self.restore_state(current_state)
+
             if self.check_win_condition():
-                return path
-            
-            if state not in visited:
-                visited.add(state)
-                for move, neighbor in get_neighbors(state):
-                    queue.append((neighbor, path + [move]))
+                print(f"Solved in {len(path)} moves!")
+                return path 
 
-        return None
+            visited.add(current_state)
 
-    def dfs_solve(self):
-        start_state = Level.get_level_properties(self, self.level_number)
-        stack = [(start_state, [])]
+            for magnet in self.reds + self.purples + self.grays:
+                for neighbor in self.get_neighbors(magnet.pos):
+                    original_position = magnet.pos
+                    if self.move_and_apply_effects(magnet, neighbor):
+                        new_state = tuple((magnet.pos, 'red') for magnet in self.reds) + \
+                                    tuple((magnet.pos, 'purple') for magnet in self.purples) + \
+                                    tuple((magnet.pos, 'gray') for magnet in self.grays)
+                        move = (original_position, neighbor)
+
+                        if new_state not in visited:
+                            queue.append((new_state, path + [move]))
+
+                        magnet.pos = original_position
+
+        print("No solution found.")
+        return None 
+    
+    def dfs_solve(self, state=None, path=None, visited=None):
+        if state is None:
+            state = tuple((magnet.pos, 'red') for magnet in self.reds) + \
+                    tuple((magnet.pos, 'purple') for magnet in self.purples) + \
+                    tuple((magnet.pos, 'gray') for magnet in self.grays)
+            path = []
+            visited = set()
+
+        self.restore_state(state)
+
+        if self.check_win_condition():
+            print(f"Solved in {len(path)} moves!")
+            return path
+
+        visited.add(state)
+
+        for magnet in self.reds + self.purples + self.grays:
+            for neighbor in self.get_neighbors(magnet.pos):
+                original_position = magnet.pos
+                if self.move_and_apply_effects(magnet, neighbor):
+                    new_state = tuple((magnet.pos, 'red') for magnet in self.reds) + \
+                                tuple((magnet.pos, 'purple') for magnet in self.purples) + \
+                                tuple((magnet.pos, 'gray') for magnet in self.grays)
+
+                    if new_state not in visited:
+                        move = (original_position, neighbor)
+                        result = self.dfs_solve(new_state, path + [move], visited)
+                        if result:
+                            return result 
+
+                    magnet.pos = original_position
+
+        return None 
+
+
+    def ucs_solve(self):
+        start_state = tuple((magnet.pos, 'red') for magnet in self.reds) + \
+                    tuple((magnet.pos, 'purple') for magnet in self.purples) + \
+                    tuple((magnet.pos, 'gray') for magnet in self.grays)
         visited = set()
+        priority_queue = []
 
-        while stack:
-            state, path = stack.pop()
-            
+        heappush(priority_queue, (0, start_state, []))
+
+        while priority_queue:
+            current_cost, current_state, path = heappop(priority_queue)
+            self.restore_state(current_state)
+
             if self.check_win_condition():
+                print(f"Solved in {len(path)} moves with cost {current_cost}!")
                 return path
 
-            if state not in visited:
-                visited.add(state)
-                for move, neighbor in get_neighbors(state):
-                    stack.append((neighbor, path + [move]))
+            if current_state in visited:
+                continue
+            visited.add(current_state)
 
+            for magnet in self.reds + self.purples + self.grays:
+                for neighbor in self.get_neighbors(magnet.pos):
+                    original_position = magnet.pos
+                    if self.move_and_apply_effects(magnet, neighbor):
+                        new_state = tuple((magnet.pos, 'red') for magnet in self.reds) + \
+                                    tuple((magnet.pos, 'purple') for magnet in self.purples) + \
+                                    tuple((magnet.pos, 'gray') for magnet in self.grays)
+                        move = (original_position, neighbor)
+                        move_cost = 1
+                        new_cost = current_cost + move_cost
+
+                        if new_state not in visited:
+                            heappush(priority_queue, (new_cost, new_state, path + [move]))
+
+                        magnet.pos = original_position
+
+        print("No solution found.")
+        return None
+    
+    def hill_climb_solve(self):
+        def heuristic(state):
+            total_distance = 0
+            occupied_positions = set()
+
+            for (pos, type_), magnet in zip(state, self.reds + self.purples + self.grays):
+                if pos in self.target_positions:
+                    total_distance -= 10
+                else:
+                    total_distance += min(
+                        abs(pos[0] - t[0]) + abs(pos[1] - t[1])
+                        for t in self.target_positions
+                    )
+                
+                if pos in occupied_positions:
+                    total_distance += 50
+                else:
+                    occupied_positions.add(pos)
+
+            return total_distance
+
+        current_state = tuple((magnet.pos, 'red') for magnet in self.reds) + \
+                        tuple((magnet.pos, 'purple') for magnet in self.purples) + \
+                        tuple((magnet.pos, 'gray') for magnet in self.grays)
+        self.restore_state(current_state)
+        current_score = heuristic(current_state)
+        path = []
+
+        while True:
+            neighbors = []
+            for magnet in self.reds + self.purples + self.grays:
+                for neighbor in self.get_neighbors(magnet.pos):
+                    original_position = magnet.pos
+                    if self.move_and_apply_effects(magnet, neighbor):
+                        new_state = tuple((magnet.pos, 'red') for magnet in self.reds) + \
+                                    tuple((magnet.pos, 'purple') for magnet in self.purples) + \
+                                    tuple((magnet.pos, 'gray') for magnet in self.grays)
+                        move = (original_position, neighbor)
+                        neighbors.append((new_state, move))
+                        magnet.pos = original_position
+
+            if not neighbors:
+                break
+
+            best_neighbor = None
+            best_score = float('inf')
+
+            for neighbor_state, move in neighbors:
+                self.restore_state(neighbor_state)
+                score = heuristic(neighbor_state)
+
+                if score < best_score:
+                    best_score = score
+                    best_neighbor = (neighbor_state, move)
+
+            if best_score >= current_score:
+                break
+
+            current_state, best_move = best_neighbor
+            current_score = best_score
+            path.append(best_move)
+            self.restore_state(current_state)
+
+            if self.check_win_condition():
+                print(f"Solved in {len(path)} moves!")
+                return path
+
+        print("No solution found.")
         return None

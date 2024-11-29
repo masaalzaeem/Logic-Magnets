@@ -10,7 +10,6 @@ pygame.display.set_caption("Logic Magnets")
 
 level_screen = Level(screen)
 
-# Main loop flags and game state variables
 running = True
 current_level = None
 game = None
@@ -45,60 +44,67 @@ while running:
                     else:
                         resetting_to_level = True
                         initialize_level(current_level)
-                    continue  # Skip drawing for this frame
+                    continue
 
                 elif in_game:
-                    # Exit to level selection from game
                     in_game = False
                     game_over = False
                     game = None
                     resetting_to_level = False
                 else:
-                    in_game = False  # Ensure we're in the level selection state
+                    in_game = False
 
-            # Handle Shift + R key event to reset the current level
             elif event.key == pygame.K_r and pygame.key.get_mods() & pygame.KMOD_SHIFT:
                 if in_game:
                     initialize_level(current_level)
-                    continue  # Skip drawing for this frame
+                    continue
             
             elif event.key == pygame.K_b and pygame.key.get_mods() & pygame.KMOD_SHIFT:
                 if in_game:
-                    game.bfs_solve()  # Call the BFS function in Game class
-
-            # Handle Shift + D key event for DFS
+                    game.bfs_solve()
+                    game.draw()
+                    pygame.display.flip()
+                    
             elif event.key == pygame.K_d and pygame.key.get_mods() & pygame.KMOD_SHIFT:
                 if in_game:
-                    game.dfs_solve()  # Call the DFS function in Game class
+                    game.dfs_solve()
+                    game.draw()
+                    pygame.display.flip()
 
-        # Handle events in the game if in_game
+            elif event.key == pygame.K_u and pygame.key.get_mods() & pygame.KMOD_SHIFT:
+                if in_game:
+                    game.ucs_solve()
+                    game.draw()
+                    pygame.display.flip()
+
+            elif event.key == pygame.K_h and pygame.key.get_mods() & pygame.KMOD_SHIFT:
+                if in_game:
+                    game.hill_climb_solve()
+                    game.draw()
+                    pygame.display.flip()
+
         if in_game and game:
             exit_to_levels = game.handle_event(event)
 
-            # Handle game over logic
             if game.game_over:
                 game_over = True
                 in_game = False
                 resetting_to_level = False
-                continue  # Skip drawing for this frame
+                continue
 
-            # Check win condition
             if game.check_win_condition():
                 win = True
                 in_game = False
-                continue  # Skip drawing for this frame
+                continue
 
-        # Handle level selection screen events if not in game
         elif not in_game:
             selected_level = level_screen.handle_event(event)
             if selected_level is not None:
                 current_level = selected_level
                 initialize_level(current_level)
 
-    # Clear the screen each frame
-    screen.fill((0, 0, 0))  # Fill with black or a background color
+    screen.fill((0, 0, 0))
 
-    # Draw the appropriate screen based on the current state
     if in_game and game:
         game.draw()
 
@@ -108,7 +114,6 @@ while running:
         pygame.display.flip()
         pygame.time.wait(2000)
 
-        # Transition to the next level or reset to the first if exceeded
         current_level += 1
         if current_level > 30:
             current_level = 1
@@ -119,9 +124,7 @@ while running:
         game.display_game_over()
         pygame.display.flip()
 
-    # Draw level selection screen if not in game and not game over
     if not in_game and not game_over:
         level_screen.draw()
 
-    # Update the display
     pygame.display.flip()
